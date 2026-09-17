@@ -1,7 +1,7 @@
 import pandas as pd
 
 from app.db import make_engine, make_session_factory
-from app.espn_client import EspnClient, EspnTeam, EspnPlayer
+from app.espn_client import EspnTeam, EspnPlayer
 from app.models import Player, WeeklyStat, DefenseVsPosition
 from app.sync import sync_all
 
@@ -88,3 +88,58 @@ def test_sync_all_is_idempotent():
     result = sync_all(session, FakeEspnClient(), FakeStatsClient(), 2026)
     assert result.teams_synced == 1
     assert session.query(Player).count() == 2
+
+
+def test_sync_all_matches_weekly_stats_via_name_fallback():
+    """A player whose gsis_id can only be resolved via the name-fallback
+    path (no matching espn_id row in the crosswalk) must still have their
+    weekly stats synced under the correct ESPN player id."""
+
+    class EspnClientWithNameFallbackPlayer:
+        def get_teams(self):
+            return [EspnTeam(id=1, name="Dynasty Warriors", wins=5, losses=3,
+                              ties=0, points_for=650.5, points_against=600.0)]
+
+        def get_rosters(self):
+            return {1: [EspnPlayer(id=202, name="Backup WR", position="WR",
+                                    pro_team="SF", injury_status="ACTIVE",
+                                    team_id=1, projected_points=5.0,
+                                    actual_points=20.0)]}
+
+        def get_free_agents(self, size=100):
+            return []
+
+        @property
+        def current_week(self):
+            return 2
+
+    class StatsClientWithNameFallback:
+        def get_weekly_stats(self, season_year):
+            return pd.DataFrame([
+                {"player_id": "g2", "player_name": "Backup WR",
+                 "position": "WR", "recent_team": "SF",
+                 "opponent_team": "SEA", "week": 1, "fantasy_points": 14.7},
+            ])
+
+        def get_defense_vs_position(self, season_year):
+            return pd.DataFrame([
+                {"pro_team": "SEA", "position": "WR", "week": 1,
+                 "points_allowed": 14.7},
+            ])
+
+        def get_player_id_crosswalk(self):
+            # espn_id "999999" does not match any real ESPN player id, so
+            # the only way to resolve this player's gsis_id is by name.
+            return pd.DataFrame([
+                {"espn_id": "999999", "gsis_id": "g2", "name": "Backup WR"},
+            ])
+
+    session = make_session()
+    sync_all(session, EspnClientWithNameFallbackPlayer(),
+             StatsClientWithNameFallback(), 2026)
+
+    player = session.query(Player).filter_by(id=202).one()
+    assert player.gsis_id == "g2"
+
+    stat = session.query(WeeklyStat).filter_by(player_id=202).one()
+    assert stat.fantasy_points == 14.7

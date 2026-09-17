@@ -68,7 +68,10 @@ def sync_all(session, espn_client, stats_client, season_year: int) -> SyncResult
         result.players_synced += 1
     session.commit()
 
-    gsis_to_espn_id = {v: k for k, v in gsis_by_espn_id.items()}
+    gsis_to_espn_id = {
+        p.gsis_id: p.id
+        for p in session.query(Player).filter(Player.gsis_id.isnot(None))
+    }
     weekly = stats_client.get_weekly_stats(season_year)
     for _, row in weekly.iterrows():
         espn_id = gsis_to_espn_id.get(row["player_id"])
