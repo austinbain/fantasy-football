@@ -105,7 +105,24 @@ analysis, waiver rankings, lineup recommendations, league analytics.
    ```
 ```
 
-- [ ] **Step 2: Write failing tests for config loading**
+- [ ] **Step 2: Create a virtual environment and install dependencies**
+
+```bash
+python -m venv .venv
+# Windows:
+.venv/Scripts/pip install -r requirements.txt
+# macOS/Linux:
+.venv/bin/pip install -r requirements.txt
+```
+
+Every later task in this plan runs `pytest` assuming this environment is
+active. On Windows, activate it per-session with
+`.venv\Scripts\Activate.ps1` (PowerShell) or `.venv/Scripts/activate`
+(Git Bash) before running `pytest`/`python run.py`; on macOS/Linux use
+`source .venv/bin/activate`. `.venv/` is already covered by the
+`.gitignore` from Step 1.
+
+- [ ] **Step 3: Write failing tests for config loading**
 
 ```python
 # tests/test_config.py
@@ -170,12 +187,12 @@ def test_get_espn_credentials_prompts_when_env_vars_missing(monkeypatch):
     assert espn_s2 == "prompted-s2-value"
 ```
 
-- [ ] **Step 3: Run tests to verify they fail**
+- [ ] **Step 4: Run tests to verify they fail**
 
 Run: `pytest tests/test_config.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'app.config'`
 
-- [ ] **Step 4: Implement config.py**
+- [ ] **Step 5: Implement config.py**
 
 ```python
 # app/config.py
@@ -249,12 +266,12 @@ def get_espn_credentials(input_fn=input, secret_input_fn=None) -> tuple[str, str
     return swid, espn_s2
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [ ] **Step 6: Run tests to verify they pass**
 
 Run: `pytest tests/test_config.py -v`
 Expected: PASS (5 tests)
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add requirements.txt .env.example .gitignore README.md app/__init__.py app/config.py tests/__init__.py tests/test_config.py
