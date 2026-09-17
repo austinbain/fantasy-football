@@ -46,8 +46,8 @@ python-multipart==0.0.9
 python-dotenv==1.0.1
 sqlalchemy==2.0.35
 espn_api==0.44.0
-nfl_data_py==0.3.3
-pandas==2.2.3
+pandas>=2.2.3
+pyarrow>=17.0.0
 pytest==8.3.3
 pytest-mock==3.14.0
 httpx==0.27.2
@@ -700,7 +700,18 @@ Note: create an empty `tests/fixtures/__init__.py` alongside the fixture file so
 - Create: `tests/test_stats_client.py`
 
 **Interfaces:**
-- Produces: `StatsClient` with constructor `StatsClient(weekly_data_fn=None, ids_fn=None)` (defaults to the real `nfl_data_py` functions, injectable for tests), `.get_weekly_stats(season_year: int) -> pandas.DataFrame` (columns: `gsis_id`, `player_name`, `position`, `recent_team`, `opponent_team`, `week`, `fantasy_points`), `.get_defense_vs_position(season_year: int) -> pandas.DataFrame` (columns: `pro_team`, `position`, `week`, `points_allowed` — the sum of `fantasy_points` scored by players of that position against that team, per week), `.get_player_id_crosswalk() -> pandas.DataFrame` (columns: `espn_id`, `gsis_id`, `name`).
+- Produces: `StatsClient` with constructor `StatsClient(weekly_data_fn=None, ids_fn=None)`. `weekly_data_fn` defaults to a function that reads nflverse's public per-season parquet files directly via `pandas.read_parquet` (no `nfl_data_py` package — see rationale below); `ids_fn` defaults to a function that reads the `dynastyprocess/data` player-ID crosswalk CSV via `pandas.read_csv`. Both are injectable for tests. `.get_weekly_stats(season_year: int) -> pandas.DataFrame` (columns: `player_id` (nflverse's gsis-format ID), `player_name`, `position`, `recent_team`, `opponent_team`, `week`, `fantasy_points`), `.get_defense_vs_position(season_year: int) -> pandas.DataFrame` (columns: `pro_team`, `position`, `week`, `points_allowed` — the sum of `fantasy_points` scored by players of that position against that team, per week), `.get_player_id_crosswalk() -> pandas.DataFrame` (columns: `espn_id`, `gsis_id`, `name`, with `espn_id` normalized to a string of digits — the raw crosswalk file stores it as a float).
+
+**Why not the `nfl_data_py` package:** it pins `numpy<2.0`, which has no
+prebuilt wheel for current Python versions and requires a C build
+toolchain to compile from source — a toolchain most users (and this
+project's dev machine) don't have installed. `nfl_data_py` is itself a
+thin wrapper around `pandas.read_parquet`/`read_csv` calls against public
+nflverse/`dynastyprocess` URLs, so this task reads those same public,
+free, legitimate files directly and gets identical data without the
+dependency. The URLs used below are stable, versioned release assets
+(not scraped HTML), matching the spec's "free/legitimate data sources"
+requirement.
 
 - [ ] **Step 1: Write failing tests using injected fake data functions**
 
@@ -713,22 +724,24 @@ from app.stats_client import StatsClient
 
 def fake_weekly_data_fn(years):
     return pd.DataFrame([
-        {"gsis_id": "g1", "player_name": "Star RB", "position": "RB",
+        {"player_id": "g1", "player_name": "Star RB", "position": "RB",
          "recent_team": "SF", "opponent_team": "SEA", "week": 1,
          "fantasy_points": 22.4, "season": 2026},
-        {"gsis_id": "g2", "player_name": "Other RB", "position": "RB",
+        {"player_id": "g2", "player_name": "Other RB", "position": "RB",
          "recent_team": "LAR", "opponent_team": "SEA", "week": 1,
          "fantasy_points": 10.1, "season": 2026},
-        {"gsis_id": "g3", "player_name": "Star WR", "position": "WR",
+        {"player_id": "g3", "player_name": "Star WR", "position": "WR",
          "recent_team": "MIA", "opponent_team": "BUF", "week": 1,
          "fantasy_points": 15.0, "season": 2026},
     ])
 
 
 def fake_ids_fn():
+    # Mirrors the real dynastyprocess CSV: espn_id arrives as a float.
     return pd.DataFrame([
-        {"espn_id": "101", "gsis_id": "g1", "name": "Star RB"},
-        {"espn_id": "102", "gsis_id": "g3", "name": "Star WR"},
+        {"espn_id": 101.0, "gsis_id": "g1", "name": "Star RB"},
+        {"espn_id": 102.0, "gsis_id": "g3", "name": "Star WR"},
+        {"espn_id": float("nan"), "gsis_id": "g4", "name": "No ESPN Mapping"},
     ])
 
 
@@ -747,11 +760,17 @@ def test_get_defense_vs_position_aggregates_points_allowed():
     assert seattle_rb_row["points_allowed"] == 22.4 + 10.1
 
 
-def test_get_player_id_crosswalk():
+def test_get_player_id_crosswalk_normalizes_espn_id_to_string():
     client = StatsClient(weekly_data_fn=fake_weekly_data_fn, ids_fn=fake_ids_fn)
     crosswalk = client.get_player_id_crosswalk()
     row = crosswalk[crosswalk["espn_id"] == "101"].iloc[0]
     assert row["gsis_id"] == "g1"
+
+
+def test_get_player_id_crosswalk_drops_rows_with_no_espn_id():
+    client = StatsClient(weekly_data_fn=fake_weekly_data_fn, ids_fn=fake_ids_fn)
+    crosswalk = client.get_player_id_crosswalk()
+    assert "g4" not in set(crosswalk["gsis_id"])
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -765,17 +784,31 @@ Expected: FAIL with `ModuleNotFoundError: No module named 'app.stats_client'`
 # app/stats_client.py
 import pandas as pd
 
+PLAYER_STATS_URL = (
+    "https://github.com/nflverse/nflverse-data/releases/download/"
+    "player_stats/player_stats_{year}.parquet"
+)
+PLAYER_ID_CROSSWALK_URL = (
+    "https://raw.githubusercontent.com/dynastyprocess/data/master/"
+    "files/db_playerids.csv"
+)
+
+
+def _default_weekly_data_fn(years: list[int]) -> pd.DataFrame:
+    return pd.concat(
+        [pd.read_parquet(PLAYER_STATS_URL.format(year=year)) for year in years],
+        ignore_index=True,
+    )
+
+
+def _default_ids_fn() -> pd.DataFrame:
+    return pd.read_csv(PLAYER_ID_CROSSWALK_URL, low_memory=False)
+
 
 class StatsClient:
     def __init__(self, weekly_data_fn=None, ids_fn=None):
-        if weekly_data_fn is None:
-            import nfl_data_py as nfl
-            weekly_data_fn = nfl.import_weekly_data
-        if ids_fn is None:
-            import nfl_data_py as nfl
-            ids_fn = nfl.import_ids
-        self._weekly_data_fn = weekly_data_fn
-        self._ids_fn = ids_fn
+        self._weekly_data_fn = weekly_data_fn or _default_weekly_data_fn
+        self._ids_fn = ids_fn or _default_ids_fn
 
     def get_weekly_stats(self, season_year: int) -> pd.DataFrame:
         df = self._weekly_data_fn([season_year])
@@ -794,13 +827,15 @@ class StatsClient:
 
     def get_player_id_crosswalk(self) -> pd.DataFrame:
         ids = self._ids_fn()
-        return ids[["espn_id", "gsis_id", "name"]].dropna(subset=["espn_id"])
+        ids = ids.dropna(subset=["espn_id"]).copy()
+        ids["espn_id"] = ids["espn_id"].astype(float).astype(int).astype(str)
+        return ids[["espn_id", "gsis_id", "name"]]
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_stats_client.py -v`
-Expected: PASS (3 tests)
+Expected: PASS (5 tests)
 
 - [ ] **Step 5: Commit**
 
@@ -858,7 +893,7 @@ class FakeEspnClient:
 class FakeStatsClient:
     def get_weekly_stats(self, season_year):
         return pd.DataFrame([
-            {"gsis_id": "g1", "player_name": "Star RB", "position": "RB",
+            {"player_id": "g1", "player_name": "Star RB", "position": "RB",
              "recent_team": "SF", "opponent_team": "SEA", "week": 1,
              "fantasy_points": 22.4},
         ])
@@ -999,7 +1034,7 @@ def sync_all(session, espn_client, stats_client, season_year: int) -> SyncResult
     gsis_to_espn_id = {v: k for k, v in gsis_by_espn_id.items()}
     weekly = stats_client.get_weekly_stats(season_year)
     for _, row in weekly.iterrows():
-        espn_id = gsis_to_espn_id.get(row["gsis_id"])
+        espn_id = gsis_to_espn_id.get(row["player_id"])
         if espn_id is None:
             continue
         player_id = int(espn_id)
@@ -1971,7 +2006,7 @@ class FakeEspnClient:
 class FakeStatsClient:
     def get_weekly_stats(self, season_year):
         import pandas as pd
-        return pd.DataFrame(columns=["gsis_id", "player_name", "position",
+        return pd.DataFrame(columns=["player_id", "player_name", "position",
                                       "recent_team", "opponent_team", "week",
                                       "fantasy_points"])
 

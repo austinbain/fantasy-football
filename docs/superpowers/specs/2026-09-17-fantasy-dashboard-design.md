@@ -50,14 +50,25 @@ Single Python 3.11+ process:
   settings, teams, rosters, matchups, free agents, transaction
   history. Authenticates via `SWID` and `espn_s2` cookies (required
   for private leagues).
-- **`nfl_data_py`** (nflverse) for weekly player stats, schedules,
-  and defense-vs-position strength — used to build custom
-  projections instead of relying on ESPN's own weak projections or
-  scraping a paid ranking service.
+- **nflverse public data files**, read directly via `pandas.read_parquet`/
+  `read_csv` against nflverse's published release URLs (weekly player
+  stats, including each player's opponent for the week) and the
+  `dynastyprocess/data` player-ID crosswalk (for matching ESPN player
+  IDs to nflverse's) — used to build custom projections instead of
+  relying on ESPN's own weak projections or scraping a paid ranking
+  service. (The `nfl_data_py` convenience package was evaluated but
+  dropped: it pins `numpy<2.0`, which has no prebuilt wheel for modern
+  Python and requires a C build toolchain most users won't have
+  installed; it's a thin wrapper around the same public URLs, so
+  reading them directly gets the same data without that dependency.)
 - **`run.py`** as the entry point: starts uvicorn and opens the
   default browser to `http://localhost:<port>`.
-- **`.env`** (gitignored) holds `ESPN_SWID`, `ESPN_S2`,
-  `ESPN_LEAGUE_ID`, `ESPN_SEASON_YEAR`, `MY_TEAM_ID`.
+- **`.env`** (gitignored) holds only non-sensitive config —
+  `ESPN_LEAGUE_ID`, `ESPN_SEASON_YEAR`, `MY_TEAM_ID`. ESPN session
+  cookies (`SWID`, `espn_s2`) are never written to `.env` or any file:
+  `run.py` prompts for them interactively on each launch (with
+  instructions on finding them), falling back to `ESPN_SWID`/`ESPN_S2`
+  shell environment variables if already set for the session.
 
 ## Data flow
 
@@ -83,7 +94,7 @@ fantasy-nfl/
   app/
     config.py            # loads .env, validates required vars
     espn_client.py        # espn_api wrapper: league/team/roster/FA/transactions
-    stats_client.py        # nfl_data_py wrapper: weekly stats, schedule, DvP
+    stats_client.py        # direct nflverse/dynastyprocess file reads: weekly stats, DvP, ID crosswalk
     projections.py         # season avg + recent-form + matchup-adjusted projection
     models.py              # SQLAlchemy models (players, weekly_stats, rosters, teams)
     sync.py                 # refresh job: pulls ESPN + nflverse into SQLite
@@ -156,9 +167,10 @@ is rated the way they are.
 
 ## Error handling
 
-- **Expired/invalid ESPN cookies**: caught at the `espn_client`
-  level, surfaced as a dashboard-wide banner with instructions to
-  re-extract `SWID`/`espn_s2` from the browser and update `.env`.
+- **Expired/invalid ESPN cookies**: caught at the `espn_client` level,
+  surfaced as a dashboard-wide banner telling the user to restart the
+  app, which re-prompts for fresh `SWID`/`espn_s2` values with
+  instructions on finding them.
 - **nflverse data unavailable** (very early season, bye weeks, data
   lag): `projections.py` falls back to ESPN-only inputs rather than
   failing.
@@ -181,8 +193,10 @@ is rated the way they are.
 
 - ESPN league ID and season year.
 - The user's team ID within the league.
-- `SWID` and `espn_s2` cookie values (instructions to extract these
-  from browser dev tools will be included in the README).
+- `SWID` and `espn_s2` cookie values, entered interactively when the
+  app starts (instructions to extract these from browser dev tools
+  are printed at the prompt and included in the README). Never stored
+  in `.env` or any other file.
 
 ## Open questions / future work (explicitly out of scope for v1)
 
