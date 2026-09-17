@@ -14,7 +14,7 @@
 
 - Python 3.11+.
 - No live network calls in unit tests — `espn_api` and `nfl_data_py` are always mocked/injected in tests; only manual runs against the real dashboard exercise the live APIs (per spec's Testing section).
-- `.env` holds `ESPN_SWID`, `ESPN_S2`, `ESPN_LEAGUE_ID`, `ESPN_SEASON_YEAR`, `MY_TEAM_ID`, optional `DB_PATH` — never committed (`.gitignore`).
+- `.env` holds only non-sensitive config — `ESPN_LEAGUE_ID`, `ESPN_SEASON_YEAR`, `MY_TEAM_ID`, optional `DB_PATH` — and is gitignored regardless. ESPN session cookies (`SWID`, `espn_s2`) are never written to `.env` or any file: `run.py` prompts for them interactively on every launch (falling back to `ESPN_SWID`/`ESPN_S2` shell environment variables if the user set those for the session), with printed instructions on how to find them, and holds them in memory only for that process's lifetime.
 - No background scheduler — data refresh is a manual, explicit action (a "Refresh Data" button), per spec's Data Flow section.
 - Projection math must stay inspectable (simple weighted formula), not a black-box model, per spec's `projections.py` section.
 
@@ -33,7 +33,7 @@
 - Create: `README.md`
 
 **Interfaces:**
-- Produces: `Config` dataclass with fields `espn_swid: str`, `espn_s2: str`, `league_id: int`, `season_year: int`, `my_team_id: int`, `db_path: str`; `ConfigError(Exception)`; `load_config(env_path: str = ".env") -> Config`.
+- Produces: `Config` dataclass with fields `league_id: int`, `season_year: int`, `my_team_id: int`, `db_path: str` (no cookie fields — cookies are never persisted); `ConfigError(Exception)`; `load_config(env_path: str = ".env") -> Config`; `COOKIE_INSTRUCTIONS: str`; `get_espn_credentials(input_fn=input, secret_input_fn=None) -> tuple[str, str]` (prompts interactively for `SWID`/`espn_s2`, falling back to `ESPN_SWID`/`ESPN_S2` env vars if already set — never reads them from a file).
 
 - [ ] **Step 1: Create scaffolding files**
 
@@ -55,13 +55,15 @@ httpx==0.27.2
 
 `.env.example`:
 ```
-ESPN_SWID={XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}
-ESPN_S2=your_espn_s2_cookie_value_here
 ESPN_LEAGUE_ID=123456
 ESPN_SEASON_YEAR=2026
 MY_TEAM_ID=1
 DB_PATH=fantasy.db
 ```
+
+Note: ESPN session cookies (`SWID`, `espn_s2`) intentionally do NOT go
+here. They're requested interactively when you run `python run.py` and
+are never written to disk — see the Setup section below.
 
 `.gitignore`:
 ```
@@ -86,13 +88,21 @@ analysis, waiver rankings, lineup recommendations, league analytics.
 1. `python -m venv .venv && .venv\Scripts\activate` (Windows) or
    `source .venv/bin/activate` (macOS/Linux)
 2. `pip install -r requirements.txt`
-3. Copy `.env.example` to `.env` and fill in:
-   - `ESPN_LEAGUE_ID`, `ESPN_SEASON_YEAR`, `MY_TEAM_ID` — from your
-     league's ESPN URL and team.
-   - `ESPN_SWID` / `ESPN_S2` — open your league on espn.com while
-     logged in, open browser dev tools -> Application/Storage ->
-     Cookies -> espn.com, and copy the `SWID` and `espn_s2` values.
-4. `python run.py` — starts the server and opens your browser.
+3. Copy `.env.example` to `.env` and fill in `ESPN_LEAGUE_ID`,
+   `ESPN_SEASON_YEAR`, and `MY_TEAM_ID` (from your league's ESPN URL
+   and team page). Do **not** put ESPN cookies in this file.
+4. `python run.py` — starts the server, prompts you for your ESPN
+   `SWID` and `espn_s2` session cookies (printing instructions on
+   where to find them in your browser), then opens your browser.
+   These cookies are held in memory only for this run and are never
+   written to `.env` or any other file.
+
+   To skip retyping them every run, you can instead export them as
+   shell environment variables for your terminal session (still never
+   committed to a file):
+   ```powershell
+   $env:ESPN_SWID = "{...}"; $env:ESPN_S2 = "..."
+   ```
 ```
 
 - [ ] **Step 2: Write failing tests for config loading**
@@ -100,13 +110,11 @@ analysis, waiver rankings, lineup recommendations, league analytics.
 ```python
 # tests/test_config.py
 import pytest
-from app.config import load_config, ConfigError
+from app.config import load_config, get_espn_credentials, ConfigError
 
 
 def write_env(tmp_path, **overrides):
     values = {
-        "ESPN_SWID": "{TEST-SWID}",
-        "ESPN_S2": "test-s2-value",
         "ESPN_LEAGUE_ID": "123456",
         "ESPN_SEASON_YEAR": "2026",
         "MY_TEAM_ID": "1",
@@ -122,7 +130,6 @@ def write_env(tmp_path, **overrides):
 def test_load_config_success(tmp_path):
     env_path = write_env(tmp_path)
     config = load_config(str(env_path))
-    assert config.espn_swid == "{TEST-SWID}"
     assert config.league_id == 123456
     assert config.season_year == 2026
     assert config.my_team_id == 1
@@ -130,19 +137,37 @@ def test_load_config_success(tmp_path):
 
 
 def test_load_config_missing_required_var_raises(tmp_path):
-    values = {
-        "ESPN_SWID": "{TEST-SWID}",
-        "ESPN_S2": "test-s2-value",
-        "ESPN_LEAGUE_ID": "123456",
-        "ESPN_SEASON_YEAR": "2026",
-        "MY_TEAM_ID": None,
-    }
-    env_path = tmp_path / ".env"
-    env_path.write_text(
-        "\n".join(f"{k}={v}" for k, v in values.items() if v is not None)
-    )
+    env_path = write_env(tmp_path, MY_TEAM_ID=None)
     with pytest.raises(ConfigError, match="MY_TEAM_ID"):
         load_config(str(env_path))
+
+
+def test_load_config_never_reads_espn_cookies_from_file(tmp_path):
+    # Even if a stray .env has cookie values in it (e.g. a leftover from
+    # an older setup), Config must not surface them - they must only ever
+    # come from get_espn_credentials(), never from load_config().
+    env_path = write_env(tmp_path, ESPN_SWID="{SHOULD-BE-IGNORED}")
+    config = load_config(str(env_path))
+    assert not hasattr(config, "espn_swid")
+
+
+def test_get_espn_credentials_uses_env_vars_if_present(monkeypatch):
+    monkeypatch.setenv("ESPN_SWID", "{ENV-SWID}")
+    monkeypatch.setenv("ESPN_S2", "env-s2-value")
+    swid, espn_s2 = get_espn_credentials()
+    assert swid == "{ENV-SWID}"
+    assert espn_s2 == "env-s2-value"
+
+
+def test_get_espn_credentials_prompts_when_env_vars_missing(monkeypatch):
+    monkeypatch.delenv("ESPN_SWID", raising=False)
+    monkeypatch.delenv("ESPN_S2", raising=False)
+    swid, espn_s2 = get_espn_credentials(
+        input_fn=lambda _: "{PROMPTED-SWID}",
+        secret_input_fn=lambda _: "prompted-s2-value",
+    )
+    assert swid == "{PROMPTED-SWID}"
+    assert espn_s2 == "prompted-s2-value"
 ```
 
 - [ ] **Step 3: Run tests to verify they fail**
@@ -154,18 +179,29 @@ Expected: FAIL with `ModuleNotFoundError: No module named 'app.config'`
 
 ```python
 # app/config.py
+import getpass
 import os
 from dataclasses import dataclass
 
 from dotenv import load_dotenv
 
-REQUIRED_VARS = [
-    "ESPN_SWID",
-    "ESPN_S2",
-    "ESPN_LEAGUE_ID",
-    "ESPN_SEASON_YEAR",
-    "MY_TEAM_ID",
-]
+REQUIRED_VARS = ["ESPN_LEAGUE_ID", "ESPN_SEASON_YEAR", "MY_TEAM_ID"]
+
+COOKIE_INSTRUCTIONS = """
+ESPN cookies are needed to access your private league. They are requested
+each time you start the app and are never written to disk.
+
+To find them:
+  1. Log into https://www.espn.com and open your fantasy league.
+  2. Open browser DevTools (F12) -> Application (Chrome) or Storage
+     (Firefox) tab -> Cookies -> https://www.espn.com.
+  3. Copy the value of the 'SWID' cookie (looks like {XXXXXXXX-XXXX-...}).
+  4. Copy the value of the 'espn_s2' cookie (a long encoded string).
+
+Tip: to skip retyping these every run, set them as shell environment
+variables for this terminal session instead (never in a committed file):
+  PowerShell:  $env:ESPN_SWID = "{...}"; $env:ESPN_S2 = "..."
+""".strip()
 
 
 class ConfigError(Exception):
@@ -174,8 +210,6 @@ class ConfigError(Exception):
 
 @dataclass
 class Config:
-    espn_swid: str
-    espn_s2: str
     league_id: int
     season_year: int
     my_team_id: int
@@ -190,25 +224,41 @@ def load_config(env_path: str = ".env") -> Config:
             f"Missing required environment variables: {', '.join(missing)}"
         )
     return Config(
-        espn_swid=os.environ["ESPN_SWID"],
-        espn_s2=os.environ["ESPN_S2"],
         league_id=int(os.environ["ESPN_LEAGUE_ID"]),
         season_year=int(os.environ["ESPN_SEASON_YEAR"]),
         my_team_id=int(os.environ["MY_TEAM_ID"]),
         db_path=os.getenv("DB_PATH", "fantasy.db"),
     )
+
+
+def get_espn_credentials(input_fn=input, secret_input_fn=None) -> tuple[str, str]:
+    """Get ESPN session cookies, prompting interactively rather than ever
+    reading them from a file. Falls back to ESPN_SWID/ESPN_S2 shell
+    environment variables if the user already set those for convenience."""
+    if secret_input_fn is None:
+        secret_input_fn = getpass.getpass
+
+    swid = os.getenv("ESPN_SWID")
+    espn_s2 = os.getenv("ESPN_S2")
+    if swid and espn_s2:
+        return swid, espn_s2
+
+    print(COOKIE_INSTRUCTIONS)
+    swid = input_fn("SWID cookie value: ").strip()
+    espn_s2 = secret_input_fn("espn_s2 cookie value: ").strip()
+    return swid, espn_s2
 ```
 
 - [ ] **Step 5: Run tests to verify they pass**
 
 Run: `pytest tests/test_config.py -v`
-Expected: PASS (2 tests)
+Expected: PASS (5 tests)
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add requirements.txt .env.example .gitignore README.md app/__init__.py app/config.py tests/__init__.py tests/test_config.py
-git commit -m "feat: add project scaffolding and env-based config"
+git commit -m "feat: add project scaffolding and interactive ESPN cookie prompt"
 ```
 
 ---
@@ -1871,7 +1921,7 @@ git commit -m "feat: add power rankings, luck index, and standings projection"
 - Create: `tests/test_web_dashboard.py`
 
 **Interfaces:**
-- Consumes: `load_config` (Task 1), `make_engine`/`make_session_factory` (Task 2), `EspnClient.connect` (Task 3), `StatsClient` (Task 4), `sync_all` (Task 5).
+- Consumes: `load_config`, `get_espn_credentials` (Task 1), `make_engine`/`make_session_factory` (Task 2), `EspnClient.connect` (Task 3), `StatsClient` (Task 4), `sync_all` (Task 5).
 - Produces: `create_app(session_factory, espn_client_factory, stats_client_factory, season_year, my_team_id) -> FastAPI`; module-level `app` in `app/web/app.py` built from real config for `run.py`/uvicorn to import; dependency `get_session` (FastAPI dependency yielding a session bound to the app's session factory) importable by later route tasks via `request.app.state.session_factory`.
 
 - [ ] **Step 1: Write failing tests using FastAPI's TestClient**
@@ -2106,7 +2156,7 @@ import webbrowser
 
 import uvicorn
 
-from app.config import load_config
+from app.config import get_espn_credentials, load_config
 from app.db import make_engine, make_session_factory
 from app.espn_client import EspnClient
 from app.stats_client import StatsClient
@@ -2115,12 +2165,13 @@ from app.web.app import create_app
 
 def main():
     config = load_config()
+    swid, espn_s2 = get_espn_credentials()
     engine = make_engine(config.db_path)
     session_factory = make_session_factory(engine)
 
     def espn_client_factory():
         return EspnClient.connect(config.league_id, config.season_year,
-                                   config.espn_swid, config.espn_s2)
+                                   swid, espn_s2)
 
     app = create_app(
         session_factory=session_factory,
@@ -2830,8 +2881,8 @@ And change `EspnClient.connect` to wrap construction:
         except Exception as exc:
             raise EspnAuthError(
                 "Could not authenticate with ESPN. Your session cookies may "
-                "have expired — re-extract SWID/espn_s2 from your browser "
-                "and update .env."
+                "have expired or been mistyped — restart the app to be "
+                "prompted for fresh SWID/espn_s2 values."
             ) from exc
         return cls(league)
 ```
@@ -2916,8 +2967,9 @@ Append to `README.md`:
 ## Troubleshooting
 
 **"Sync failed: Could not authenticate with ESPN"** — Your `SWID`/`espn_s2`
-cookies expired. Re-extract them from your browser (see Setup step 3) and
-update `.env`, then click "Refresh Data" again.
+cookies expired or were mistyped. Stop the app (Ctrl+C) and run
+`python run.py` again — it will prompt you for fresh cookie values, with
+instructions on where to find them in your browser.
 
 **A player's stats look wrong or missing** — check `/debug/unmatched` in the
 dashboard; it lists ESPN players that couldn't be matched to nflverse stats.
