@@ -23,7 +23,7 @@ def _matchup_multiplier(session, position: str, opponent: str,
     all_rows = (
         session.query(DefenseVsPosition)
         .filter_by(position=position, season=season_year)
-        .filter(DefenseVsPosition.week <= upcoming_week)
+        .filter(DefenseVsPosition.week < upcoming_week)
         .all()
     )
     if not all_rows:
