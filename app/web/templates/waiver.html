@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Waiver Wire</h1>
+<table>
+    <thead>
+        <tr><th>Player</th><th>Position</th><th>Projected</th><th>Need Score</th><th>Combined</th></tr>
+    </thead>
+    <tbody>
+        {% for c in candidates %}
+        <tr>
+            <td>{{ c.name }}</td>
+            <td>{{ c.position }}</td>
+            <td>{{ "%.1f"|format(c.projected_points) }}</td>
+            <td>{{ "%.2f"|format(c.need_score) }}</td>
+            <td>{{ "%.1f"|format(c.combined_score) }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
