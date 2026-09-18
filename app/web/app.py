@@ -33,6 +33,9 @@ def create_app(session_factory, espn_client_factory, stats_client_factory,
     from app.web.routes.lineup import router as lineup_router
     app.include_router(lineup_router)
 
+    from app.web.routes.analytics import router as analytics_router
+    app.include_router(analytics_router)
+
     return app
 
 
