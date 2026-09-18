@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.db import make_engine, make_session_factory
+from app.espn_client import EspnAuthError
 from app.models import Team
 from app.web.app import create_app
 
@@ -68,3 +69,40 @@ def test_refresh_triggers_sync_and_returns_partial(client):
     response = client.post("/sync")
     assert response.status_code == 200
     assert "Synced" in response.text
+
+
+class FailingEspnClient:
+    def get_teams(self):
+        raise EspnAuthError("ESPN session expired")
+
+    def get_rosters(self):
+        return {}
+
+    def get_free_agents(self, size=100):
+        return []
+
+    @property
+    def current_week(self):
+        return 1
+
+
+def test_sync_with_expired_cookies_shows_error_banner():
+    engine = make_engine(":memory:")
+    session_factory = make_session_factory(engine)
+    app = create_app(
+        session_factory=session_factory,
+        espn_client_factory=lambda: FailingEspnClient(),
+        stats_client_factory=lambda: FakeStatsClient(),
+        season_year=2026,
+        my_team_id=1,
+    )
+    test_client = TestClient(app)
+    response = test_client.post("/sync")
+    assert response.status_code == 200
+    assert "session expired" in response.text.lower() or \
+           "re-authenticate" in response.text.lower()
+
+
+def test_debug_unmatched_page_loads(client):
+    response = client.get("/debug/unmatched")
+    assert response.status_code == 200

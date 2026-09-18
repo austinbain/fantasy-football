@@ -23,3 +23,13 @@ analysis, waiver rankings, lineup recommendations, league analytics.
    ```powershell
    $env:ESPN_SWID = "{...}"; $env:ESPN_S2 = "..."
    ```
+
+## Troubleshooting
+
+**"Sync failed: Could not authenticate with ESPN"** — Your `SWID`/`espn_s2`
+cookies expired or were mistyped. Stop the app (Ctrl+C) and run
+`python run.py` again — it will prompt you for fresh cookie values, with
+instructions on where to find them in your browser.
+
+**A player's stats look wrong or missing** — check `/debug/unmatched` in the
+dashboard; it lists ESPN players that couldn't be matched to nflverse stats.

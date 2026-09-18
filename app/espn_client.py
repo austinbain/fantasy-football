@@ -1,6 +1,10 @@
 from dataclasses import dataclass
 
 
+class EspnAuthError(Exception):
+    pass
+
+
 @dataclass
 class EspnPlayer:
     id: int
@@ -46,8 +50,15 @@ class EspnClient:
                 espn_s2: str) -> "EspnClient":
         from espn_api.football import League
 
-        league = League(league_id=league_id, year=season_year,
-                         espn_s2=espn_s2, swid=swid)
+        try:
+            league = League(league_id=league_id, year=season_year,
+                             espn_s2=espn_s2, swid=swid)
+        except Exception as exc:
+            raise EspnAuthError(
+                "Could not authenticate with ESPN. Your session cookies may "
+                "have expired or been mistyped — restart the app to be "
+                "prompted for fresh SWID/espn_s2 values."
+            ) from exc
         return cls(league)
 
     def get_teams(self) -> list[EspnTeam]:

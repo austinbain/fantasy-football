@@ -2,3 +2,4 @@ body { font-family: sans-serif; max-width: 960px; margin: 2rem auto; }
 nav a { margin-right: 1rem; }
 table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
 th, td { border: 1px solid #ccc; padding: 0.5rem; text-align: left; }
+.error-banner { background: #fdd; border: 1px solid #c00; padding: 0.75rem; }

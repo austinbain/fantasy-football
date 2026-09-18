@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Request
 
-from app.models import Team
+from app.espn_client import EspnAuthError
+from app.models import Player, Team
 from app.sync import sync_all
 from app.web.app import get_session
 
@@ -17,10 +18,22 @@ def dashboard(request: Request, session=Depends(get_session)):
 
 @router.post("/sync")
 def refresh(request: Request, session=Depends(get_session)):
+    templates = request.app.state.templates
     espn_client = request.app.state.espn_client_factory()
     stats_client = request.app.state.stats_client_factory()
-    result = sync_all(session, espn_client, stats_client,
-                       request.app.state.season_year)
-    templates = request.app.state.templates
+    try:
+        result = sync_all(session, espn_client, stats_client,
+                           request.app.state.season_year)
+    except EspnAuthError as exc:
+        return templates.TemplateResponse(request, "partials/error_banner.html",
+                                           {"message": str(exc)})
     return templates.TemplateResponse(request, "partials/sync_status.html",
                                        {"result": result})
+
+
+@router.get("/debug/unmatched")
+def debug_unmatched(request: Request, session=Depends(get_session)):
+    unmatched = session.query(Player).filter(Player.gsis_id.is_(None)).all()
+    templates = request.app.state.templates
+    return templates.TemplateResponse(request, "debug_unmatched.html",
+                                       {"players": unmatched})

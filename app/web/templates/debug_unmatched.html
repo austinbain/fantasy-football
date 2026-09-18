@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Unmatched Players</h1>
+<p>These ESPN players couldn't be matched to an nflverse stats ID, so their
+   weekly stats and projections may be incomplete.</p>
+<ul>
+    {% for player in players %}
+    <li>{{ player.name }} ({{ player.position }}, {{ player.pro_team }})</li>
+    {% endfor %}
+</ul>
+{% endblock %}
