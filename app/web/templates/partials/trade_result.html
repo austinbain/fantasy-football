@@ -1,0 +1,10 @@
+<p>
+    Side A value: {{ "%.1f"|format(result.side_a_value) }}<br>
+    Side B value: {{ "%.1f"|format(result.side_b_value) }}<br>
+    Difference: {{ "%.0f"|format(result.difference_pct * 100) }}%<br>
+    {% if result.is_lopsided %}
+        <strong>This trade looks lopsided.</strong>
+    {% else %}
+        This trade looks fair.
+    {% endif %}
+</p>

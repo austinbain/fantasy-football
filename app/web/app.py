@@ -24,6 +24,9 @@ def create_app(session_factory, espn_client_factory, stats_client_factory,
     from app.web.routes.dashboard import router as dashboard_router
     app.include_router(dashboard_router)
 
+    from app.web.routes.trades import router as trades_router
+    app.include_router(trades_router)
+
     return app
 
 

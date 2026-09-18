@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Trade Analyzer</h1>
+
+<form hx-post="/trades/evaluate" hx-target="#trade-result" hx-swap="innerHTML">
+    <label>Week: <input type="number" name="week" value="1"></label>
+    <h3>Side A</h3>
+    {% for team in teams %}
+        {% for player in rosters[team.id] %}
+        <label>
+            <input type="checkbox" name="side_a_players" value="{{ player.id }}">
+            {{ player.name }} ({{ team.name }})
+        </label><br>
+        {% endfor %}
+    {% endfor %}
+    <h3>Side B</h3>
+    {% for team in teams %}
+        {% for player in rosters[team.id] %}
+        <label>
+            <input type="checkbox" name="side_b_players" value="{{ player.id }}">
+            {{ player.name }} ({{ team.name }})
+        </label><br>
+        {% endfor %}
+    {% endfor %}
+    <button type="submit">Evaluate</button>
+</form>
+<div id="trade-result"></div>
+
+<h2>Suggested Trades</h2>
+<ul>
+{% for s in suggestions %}
+    <li>{{ s.rationale }}</li>
+{% endfor %}
+</ul>
+{% endblock %}
