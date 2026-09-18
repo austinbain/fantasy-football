@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Fantasy Dashboard</title>
+    <script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js"
+            integrity="sha384-ujb1lZYygJmzgSwoxRggbCHcjc0rB2XoQrxeTUQyRjrOnlCoYta87iKBWq3EsdM2"
+            crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <nav>
+        <a href="/">Dashboard</a>
+        <a href="/trades">Trade Analyzer</a>
+        <a href="/waiver">Waiver Wire</a>
+        <a href="/lineup">Lineup</a>
+        <a href="/analytics">Analytics</a>
+    </nav>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>

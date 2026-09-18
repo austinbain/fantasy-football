@@ -1,0 +1,7 @@
+<p>
+    Synced {{ result.teams_synced }} teams, {{ result.players_synced }}
+    players, {{ result.weekly_stats_synced }} weekly stat rows.
+    {% if result.unmatched_players %}
+    <br>Unmatched players: {{ result.unmatched_players | join(", ") }}
+    {% endif %}
+</p>
