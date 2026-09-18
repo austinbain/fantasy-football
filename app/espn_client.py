@@ -29,12 +29,16 @@ class EspnTeam:
 
 
 def _map_player(raw_player, team_id: int | None) -> EspnPlayer:
+    raw_injury_status = getattr(raw_player, "injuryStatus", "ACTIVE")
     return EspnPlayer(
         id=raw_player.playerId,
         name=raw_player.name,
         position=raw_player.position,
         pro_team=raw_player.proTeam,
-        injury_status=getattr(raw_player, "injuryStatus", "ACTIVE"),
+        # espn_api returns [] (not a string) for players with no injury
+        # designation at all, e.g. team defenses (D/ST) - never store that
+        # in the DB's injury_status text column.
+        injury_status=raw_injury_status if isinstance(raw_injury_status, str) else "ACTIVE",
         team_id=team_id,
         projected_points=getattr(raw_player, "projected_avg_points", 0.0),
         actual_points=getattr(raw_player, "total_points", 0.0),

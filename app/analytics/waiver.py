@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from app.models import Player
 from app.projections import project_player
 
-ROSTER_NEED_TARGET = {"QB": 2, "RB": 4, "WR": 4, "TE": 2, "K": 1, "DST": 1}
+ROSTER_NEED_TARGET = {"QB": 2, "RB": 4, "WR": 4, "TE": 2, "K": 1, "D/ST": 1}
 
 
 @dataclass

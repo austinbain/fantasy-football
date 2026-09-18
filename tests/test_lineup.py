@@ -19,7 +19,7 @@ def session():
         Player(id=5, name="WR1", position="WR", pro_team="BUF", team_id=1),
         Player(id=6, name="WR2", position="WR", pro_team="CIN", team_id=1),
         Player(id=7, name="TE1", position="TE", pro_team="NYJ", team_id=1),
-        Player(id=8, name="DST1", position="DST", pro_team="SEA", team_id=1),
+        Player(id=8, name="DST1", position="D/ST", pro_team="SEA", team_id=1),
         Player(id=9, name="K1", position="K", pro_team="LAR", team_id=1),
     ])
     # NOTE: player 4 ("RB3 (bench)") is intentionally scored lower than both
@@ -45,7 +45,7 @@ def session():
 def test_recommend_lineup_fills_all_slots(session):
     lineup = recommend_lineup(session, team_id=1, season_year=2026, week=4)
     slots = [rec.slot for rec in lineup]
-    assert slots == ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "DST", "K"]
+    assert slots == ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "D/ST", "K"]
 
 
 def test_recommend_lineup_flex_takes_best_remaining_rb_wr_te(session):

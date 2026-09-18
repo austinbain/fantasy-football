@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from app.models import Player
 from app.projections import project_player
 
-STANDARD_SLOTS = ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "DST", "K"]
+STANDARD_SLOTS = ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "D/ST", "K"]
 FLEX_ELIGIBLE = {"RB", "WR", "TE"}
 
 

@@ -46,3 +46,18 @@ def test_get_free_agents_have_no_team_id():
 def test_current_week():
     client = EspnClient(make_fake_league())
     assert client.current_week == 3
+
+
+def test_dst_player_with_list_injury_status_maps_to_active():
+    # Real ESPN data returns [] (not a string) for injuryStatus on players
+    # with no individual injury designation at all, e.g. team defenses -
+    # never surface that non-string value, it can't be stored as text.
+    dst = FakeEspnPlayer(-16023, "Steelers D/ST", "D/ST", "PIT",
+                          injuryStatus=[], projected_avg_points=7.37)
+    team = FakeEspnTeam(1, "Dynasty Warriors", 5, 3, 0, 650.5, 600.0,
+                         roster=[dst])
+    client = EspnClient(FakeEspnLeague(teams=[team], current_week=3))
+
+    rostered = client.get_rosters()[1][0]
+    assert rostered.injury_status == "ACTIVE"
+    assert isinstance(rostered.injury_status, str)

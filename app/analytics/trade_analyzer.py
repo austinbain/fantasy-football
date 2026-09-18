@@ -4,7 +4,7 @@ from app.models import Player, Team
 from app.projections import project_player
 
 POSITION_SCARCITY = {
-    "QB": 0.9, "RB": 1.15, "WR": 1.05, "TE": 1.1, "K": 0.7, "DST": 0.7,
+    "QB": 0.9, "RB": 1.15, "WR": 1.05, "TE": 1.1, "K": 0.7, "D/ST": 0.7,
 }
 
 
