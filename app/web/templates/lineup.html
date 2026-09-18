@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Lineup — Week {{ week }}</h1>
+<table>
+    <thead>
+        <tr><th>Slot</th><th>Player</th><th>Projected</th></tr>
+    </thead>
+    <tbody>
+        {% for rec in recommendations %}
+        <tr>
+            <td>{{ rec.slot }}</td>
+            <td>{{ rec.player_name }}</td>
+            <td>{{ "%.1f"|format(rec.projected_points) }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
