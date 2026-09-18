@@ -15,11 +15,13 @@ def trades_page(request: Request, session=Depends(get_session)):
         for team in teams
     }
     my_team_id = request.app.state.my_team_id
+    current_week = request.app.state.current_week
     suggestions = suggest_trades(session, my_team_id,
-                                  request.app.state.season_year, week=1)
+                                  request.app.state.season_year, week=current_week)
     templates = request.app.state.templates
     return templates.TemplateResponse(request, "trades.html", {
         "teams": teams, "rosters": rosters, "suggestions": suggestions,
+        "current_week": current_week,
     })
 
 
@@ -36,9 +38,14 @@ def evaluate_trade_route(
         return templates.TemplateResponse(request, "partials/trade_result.html", {
             "error": "Select at least one player for each side.",
         })
-    side_a = TradeSide(team_id=0, player_ids=[int(p) for p in side_a_players])
-    side_b = TradeSide(team_id=0, player_ids=[int(p) for p in side_b_players])
-    result = evaluate_trade(session, side_a, side_b,
-                             request.app.state.season_year, week)
+    try:
+        side_a = TradeSide(team_id=0, player_ids=[int(p) for p in side_a_players])
+        side_b = TradeSide(team_id=0, player_ids=[int(p) for p in side_b_players])
+        result = evaluate_trade(session, side_a, side_b,
+                                 request.app.state.season_year, week)
+    except (ValueError, AttributeError):
+        return templates.TemplateResponse(request, "partials/trade_result.html", {
+            "error": "One or more selected players could not be found. Please try again.",
+        })
     return templates.TemplateResponse(request, "partials/trade_result.html",
                                        {"result": result})

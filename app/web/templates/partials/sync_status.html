@@ -4,4 +4,7 @@
     {% if result.unmatched_players %}
     <br>Unmatched players: {{ result.unmatched_players | join(", ") }}
     {% endif %}
+    {% if result.stats_sync_error %}
+    <br><strong>Warning:</strong> {{ result.stats_sync_error }}
+    {% endif %}
 </p>

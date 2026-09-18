@@ -1,7 +1,7 @@
 class FakeEspnPlayer:
     def __init__(self, playerId, name, position, proTeam,
                  injuryStatus="ACTIVE", projected_total_points=0.0,
-                 total_points=0.0):
+                 total_points=0.0, projected_avg_points=0.0):
         self.playerId = playerId
         self.name = name
         self.position = position
@@ -9,6 +9,7 @@ class FakeEspnPlayer:
         self.injuryStatus = injuryStatus
         self.projected_total_points = projected_total_points
         self.total_points = total_points
+        self.projected_avg_points = projected_avg_points
 
 
 class FakeEspnTeam:

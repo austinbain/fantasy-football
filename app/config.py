@@ -2,7 +2,7 @@ import getpass
 import os
 from dataclasses import dataclass
 
-from dotenv import load_dotenv, dotenv_values
+from dotenv import dotenv_values
 
 REQUIRED_VARS = ["ESPN_LEAGUE_ID", "ESPN_SEASON_YEAR", "MY_TEAM_ID"]
 
@@ -36,20 +36,20 @@ class Config:
 
 
 def load_config(env_path: str = ".env") -> Config:
-    # First read what's in the file to check for required vars
+    # Read the file's values directly — deliberately NOT loading them into
+    # os.environ, so a stray ESPN_SWID/ESPN_S2 left in a .env can never be
+    # picked up by get_espn_credentials().
     file_vars = dotenv_values(env_path)
     missing = [key for key in REQUIRED_VARS if key not in file_vars]
     if missing:
         raise ConfigError(
             f"Missing required environment variables: {', '.join(missing)}"
         )
-    # Then load the file into os.environ
-    load_dotenv(env_path, override=True)
     return Config(
-        league_id=int(os.environ["ESPN_LEAGUE_ID"]),
-        season_year=int(os.environ["ESPN_SEASON_YEAR"]),
-        my_team_id=int(os.environ["MY_TEAM_ID"]),
-        db_path=os.getenv("DB_PATH", "fantasy.db"),
+        league_id=int(file_vars["ESPN_LEAGUE_ID"]),
+        season_year=int(file_vars["ESPN_SEASON_YEAR"]),
+        my_team_id=int(file_vars["MY_TEAM_ID"]),
+        db_path=file_vars.get("DB_PATH", "fantasy.db"),
     )
 
 

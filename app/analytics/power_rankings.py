@@ -87,15 +87,26 @@ def project_standings(session, season_year: int, remaining_weeks: int,
     rng = random.Random(random_seed)
     teams = session.query(Team).all()
 
+    def _avg_points(team: Team) -> float:
+        games_played = team.wins + team.losses + team.ties
+        return team.points_for / games_played if games_played else 100.0
+
+    # The simulated opponent is drawn from the LEAGUE-average distribution, not
+    # the team's own — otherwise every game is a coin flip regardless of how
+    # good or bad the team actually is.
+    league_avg_points = (
+        sum(_avg_points(t) for t in teams) / len(teams) if teams else 100.0
+    )
+
     win_totals = {team.id: 0.0 for team in teams}
     for _ in range(simulations):
         for team in teams:
-            games_played = team.wins + team.losses + team.ties
-            avg_points = team.points_for / games_played if games_played else 100.0
+            avg_points = _avg_points(team)
             simulated_wins = 0
             for _ in range(remaining_weeks):
                 simulated_score = rng.gauss(avg_points, avg_points * 0.15)
-                opponent_score = rng.gauss(avg_points, avg_points * 0.15)
+                opponent_score = rng.gauss(league_avg_points,
+                                            league_avg_points * 0.15)
                 if simulated_score > opponent_score:
                     simulated_wins += 1
             win_totals[team.id] += team.wins + simulated_wins

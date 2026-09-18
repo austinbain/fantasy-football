@@ -4,11 +4,11 @@ from tests.fixtures.espn_fake import FakeEspnLeague, FakeEspnTeam, FakeEspnPlaye
 
 def make_fake_league():
     rb = FakeEspnPlayer(101, "Star RB", "RB", "SF",
-                         projected_total_points=18.2, total_points=150.0)
+                         projected_avg_points=18.2, total_points=150.0)
     wr = FakeEspnPlayer(102, "Star WR", "WR", "MIA",
-                         projected_total_points=14.5, total_points=120.0)
+                         projected_avg_points=14.5, total_points=120.0)
     fa = FakeEspnPlayer(999, "Waiver Guy", "TE", "NYJ",
-                         projected_total_points=5.0, total_points=10.0)
+                         projected_avg_points=5.0, total_points=10.0)
     team = FakeEspnTeam(1, "Dynasty Warriors", 5, 3, 0, 650.5, 600.0,
                          roster=[rb, wr])
     return FakeEspnLeague(teams=[team], free_agents=[fa], current_week=3)

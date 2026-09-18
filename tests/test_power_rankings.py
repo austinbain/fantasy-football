@@ -77,3 +77,20 @@ def test_project_standings_returns_one_entry_per_team(session):
         # wins incorrectly or used the wrong probability model.
         team = teams_by_id[p.team_id]
         assert team.wins <= p.projected_wins <= team.wins + remaining_weeks
+
+
+def test_project_standings_favors_higher_scoring_teams(session):
+    """Team 1 averages 900/8 = 112.5 ppg, Team 2 averages 700/8 = 87.5 ppg
+    (league average 100.0), so Team 1 must project more wins over the rest of
+    the season. This fails if the opponent's score is drawn from the team's
+    own distribution, which makes every simulated game a 50/50 coin flip."""
+    remaining_weeks = 10
+    projections = project_standings(session, season_year=2026,
+                                     remaining_weeks=remaining_weeks,
+                                     simulations=500, random_seed=42)
+    high_scorer = next(p for p in projections if p.team_id == 1)
+    low_scorer = next(p for p in projections if p.team_id == 2)
+    # Compare remaining-season wins only, so the comparison isn't confounded
+    # by the teams' differing current records (3-5 vs 6-2).
+    assert (high_scorer.projected_wins - 3) > (low_scorer.projected_wins - 6)
+    assert high_scorer.projected_wins > low_scorer.projected_wins

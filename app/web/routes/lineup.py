@@ -7,7 +7,10 @@ router = APIRouter()
 
 
 @router.get("/lineup")
-def lineup_page(request: Request, week: int = 1, session=Depends(get_session)):
+def lineup_page(request: Request, week: int | None = None,
+                 session=Depends(get_session)):
+    if week is None:
+        week = request.app.state.current_week
     recommendations = recommend_lineup(
         session, request.app.state.my_team_id,
         request.app.state.season_year, week,

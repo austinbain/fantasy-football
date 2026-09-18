@@ -25,10 +25,15 @@ class StatsClient:
     def __init__(self, weekly_data_fn=None, ids_fn=None):
         self._weekly_data_fn = weekly_data_fn or _default_weekly_data_fn
         self._ids_fn = ids_fn or _default_ids_fn
+        self._weekly_cache: dict[int, pd.DataFrame] = {}
 
     def get_weekly_stats(self, season_year: int) -> pd.DataFrame:
-        df = self._weekly_data_fn([season_year])
-        return df[df["season"] == season_year].reset_index(drop=True)
+        if season_year not in self._weekly_cache:
+            df = self._weekly_data_fn([season_year])
+            self._weekly_cache[season_year] = (
+                df[df["season"] == season_year].reset_index(drop=True)
+            )
+        return self._weekly_cache[season_year]
 
     def get_defense_vs_position(self, season_year: int) -> pd.DataFrame:
         weekly = self.get_weekly_stats(season_year)

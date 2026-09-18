@@ -36,7 +36,7 @@ def _map_player(raw_player, team_id: int | None) -> EspnPlayer:
         pro_team=raw_player.proTeam,
         injury_status=getattr(raw_player, "injuryStatus", "ACTIVE"),
         team_id=team_id,
-        projected_points=getattr(raw_player, "projected_total_points", 0.0),
+        projected_points=getattr(raw_player, "projected_avg_points", 0.0),
         actual_points=getattr(raw_player, "total_points", 0.0),
     )
 
@@ -55,9 +55,11 @@ class EspnClient:
                              espn_s2=espn_s2, swid=swid)
         except Exception as exc:
             raise EspnAuthError(
-                "Could not authenticate with ESPN. Your session cookies may "
-                "have expired or been mistyped — restart the app to be "
-                "prompted for fresh SWID/espn_s2 values."
+                f"Could not authenticate with ESPN ({type(exc).__name__}). "
+                "Your session cookies may have expired or been mistyped — "
+                "restart the app to be prompted for fresh SWID/espn_s2 "
+                "values. If this keeps happening, also double-check your "
+                "league ID, season year, and network connection."
             ) from exc
         return cls(league)
 

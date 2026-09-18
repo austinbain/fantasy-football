@@ -143,3 +143,83 @@ def test_sync_all_matches_weekly_stats_via_name_fallback():
 
     stat = session.query(WeeklyStat).filter_by(player_id=202).one()
     assert stat.fantasy_points == 14.7
+
+
+def test_sync_all_treats_ambiguous_names_as_unmatched():
+    """A name that appears more than once in the crosswalk must never be
+    used as a fallback match — an ambiguous match is worse than no match."""
+
+    class EspnClientWithAmbiguousNamePlayer:
+        def get_teams(self):
+            return [EspnTeam(id=1, name="Dynasty Warriors", wins=5, losses=3,
+                              ties=0, points_for=650.5, points_against=600.0)]
+
+        def get_rosters(self):
+            return {1: [EspnPlayer(id=303, name="Common Name", position="WR",
+                                    pro_team="SF", injury_status="ACTIVE",
+                                    team_id=1, projected_points=5.0,
+                                    actual_points=20.0)]}
+
+        def get_free_agents(self, size=100):
+            return []
+
+        @property
+        def current_week(self):
+            return 2
+
+    class StatsClientWithAmbiguousName:
+        def get_weekly_stats(self, season_year):
+            return pd.DataFrame(columns=["player_id", "player_name", "position",
+                                          "recent_team", "opponent_team", "week",
+                                          "fantasy_points"])
+
+        def get_defense_vs_position(self, season_year):
+            return pd.DataFrame(columns=["pro_team", "position", "week",
+                                          "points_allowed"])
+
+        def get_player_id_crosswalk(self):
+            # "Common Name" appears twice with different gsis_ids -- ambiguous.
+            return pd.DataFrame([
+                {"espn_id": "111111", "gsis_id": "gA", "name": "Common Name"},
+                {"espn_id": "222222", "gsis_id": "gB", "name": "Common Name"},
+            ])
+
+    session = make_session()
+    result = sync_all(session, EspnClientWithAmbiguousNamePlayer(),
+                       StatsClientWithAmbiguousName(), 2026)
+
+    player = session.query(Player).filter_by(id=303).one()
+    assert player.gsis_id is None
+    assert "Common Name" in result.unmatched_players
+
+
+def test_sync_all_degrades_gracefully_when_nflverse_is_unreachable():
+    """nflverse being unreachable must not crash the whole sync — the ESPN
+    half still completes and the failure is reported on the result."""
+
+    class UnreachableStatsClient:
+        def get_player_id_crosswalk(self):
+            raise ConnectionError("simulated network failure")
+
+        def get_weekly_stats(self, season_year):
+            raise ConnectionError("simulated network failure")
+
+        def get_defense_vs_position(self, season_year):
+            raise ConnectionError("simulated network failure")
+
+    session = make_session()
+    result = sync_all(session, FakeEspnClient(), UnreachableStatsClient(), 2026)
+
+    assert result.teams_synced == 1
+    assert result.players_synced == 2
+    assert result.stats_sync_error is not None
+    assert "nflverse" in result.stats_sync_error.lower()
+
+    rb = session.query(Player).filter_by(id=101).one()
+    assert rb.gsis_id is None  # crosswalk never fetched, nothing to match against
+
+
+def test_sync_all_records_current_week_from_espn():
+    session = make_session()
+    result = sync_all(session, FakeEspnClient(), FakeStatsClient(), 2026)
+    assert result.current_week == 2

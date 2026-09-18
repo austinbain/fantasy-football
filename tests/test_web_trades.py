@@ -57,3 +57,23 @@ def test_evaluate_trade_endpoint_with_empty_side_returns_friendly_error(client):
     })
     assert response.status_code == 200
     assert "select at least one player" in response.text.lower()
+
+
+def test_evaluate_trade_endpoint_with_unknown_player_id_returns_friendly_error(client):
+    response = client.post("/trades/evaluate", data={
+        "side_a_players": ["1"],
+        "side_b_players": ["999999"],
+        "week": "4",
+    })
+    assert response.status_code == 200
+    assert "could not be found" in response.text.lower()
+
+
+def test_evaluate_trade_endpoint_with_malformed_player_id_returns_friendly_error(client):
+    response = client.post("/trades/evaluate", data={
+        "side_a_players": ["1"],
+        "side_b_players": ["not-a-number"],
+        "week": "4",
+    })
+    assert response.status_code == 200
+    assert "could not be found" in response.text.lower()

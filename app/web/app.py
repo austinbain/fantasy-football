@@ -17,6 +17,7 @@ def create_app(session_factory, espn_client_factory, stats_client_factory,
     app.state.season_year = season_year
     app.state.my_team_id = my_team_id
     app.state.templates = templates
+    app.state.current_week = 1
 
     app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")),
                name="static")

@@ -103,6 +103,43 @@ def test_sync_with_expired_cookies_shows_error_banner():
            "re-authenticate" in response.text.lower()
 
 
+def test_sync_with_expired_cookies_from_factory_shows_error_banner():
+    """The real production shape of this failure: EspnClient.connect() itself
+    raises, i.e. the factory call raises before sync_all is ever entered."""
+
+    def failing_factory():
+        raise EspnAuthError("Could not authenticate with ESPN (mocked).")
+
+    engine = make_engine(":memory:")
+    session_factory = make_session_factory(engine)
+    app = create_app(
+        session_factory=session_factory,
+        espn_client_factory=failing_factory,
+        stats_client_factory=lambda: FakeStatsClient(),
+        season_year=2026,
+        my_team_id=1,
+    )
+    test_client = TestClient(app)
+    response = test_client.post("/sync")
+    assert response.status_code == 200
+    assert "authenticate" in response.text.lower()
+
+
+def test_sync_updates_current_week_for_other_pages(client):
+    """A successful sync must publish ESPN's real current week to app state so
+    the waiver/trades/lineup pages stop hardcoding week=1."""
+
+    class FakeEspnClientWeek7(FakeEspnClient):
+        @property
+        def current_week(self):
+            return 7
+
+    client.app.state.espn_client_factory = lambda: FakeEspnClientWeek7()
+    response = client.post("/sync")
+    assert response.status_code == 200
+    assert client.app.state.current_week == 7
+
+
 def test_debug_unmatched_page_loads(client):
     response = client.get("/debug/unmatched")
     assert response.status_code == 200

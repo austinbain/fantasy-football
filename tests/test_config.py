@@ -1,3 +1,5 @@
+import os
+
 import pytest
 from app.config import load_config, get_espn_credentials, ConfigError
 
@@ -31,13 +33,17 @@ def test_load_config_missing_required_var_raises(tmp_path):
         load_config(str(env_path))
 
 
-def test_load_config_never_reads_espn_cookies_from_file(tmp_path):
+def test_load_config_never_reads_espn_cookies_from_file(tmp_path, monkeypatch):
     # Even if a stray .env has cookie values in it (e.g. a leftover from
-    # an older setup), Config must not surface them - they must only ever
-    # come from get_espn_credentials(), never from load_config().
+    # an older setup), Config must not surface them, AND they must never
+    # be loaded into the process environment where get_espn_credentials()
+    # would silently pick them up.
+    monkeypatch.delenv("ESPN_SWID", raising=False)
+    monkeypatch.delenv("ESPN_S2", raising=False)
     env_path = write_env(tmp_path, ESPN_SWID="{SHOULD-BE-IGNORED}")
     config = load_config(str(env_path))
     assert not hasattr(config, "espn_swid")
+    assert os.environ.get("ESPN_SWID") is None
 
 
 def test_get_espn_credentials_uses_env_vars_if_present(monkeypatch):
