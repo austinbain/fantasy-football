@@ -49,3 +49,11 @@ def test_evaluate_trade_endpoint_returns_result_partial(client):
     })
     assert response.status_code == 200
     assert "Great RB" in response.text or "value" in response.text.lower()
+
+
+def test_evaluate_trade_endpoint_with_empty_side_returns_friendly_error(client):
+    response = client.post("/trades/evaluate", data={
+        "week": "4",
+    })
+    assert response.status_code == 200
+    assert "select at least one player" in response.text.lower()

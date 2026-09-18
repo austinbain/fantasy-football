@@ -26,15 +26,19 @@ def trades_page(request: Request, session=Depends(get_session)):
 @router.post("/trades/evaluate")
 def evaluate_trade_route(
     request: Request,
-    side_a_players: list[str] = Form(...),
-    side_b_players: list[str] = Form(...),
+    side_a_players: list[str] = Form(default=[]),
+    side_b_players: list[str] = Form(default=[]),
     week: int = Form(...),
     session=Depends(get_session),
 ):
+    templates = request.app.state.templates
+    if not side_a_players or not side_b_players:
+        return templates.TemplateResponse(request, "partials/trade_result.html", {
+            "error": "Select at least one player for each side.",
+        })
     side_a = TradeSide(team_id=0, player_ids=[int(p) for p in side_a_players])
     side_b = TradeSide(team_id=0, player_ids=[int(p) for p in side_b_players])
     result = evaluate_trade(session, side_a, side_b,
                              request.app.state.season_year, week)
-    templates = request.app.state.templates
     return templates.TemplateResponse(request, "partials/trade_result.html",
                                        {"result": result})
